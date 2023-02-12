@@ -1,0 +1,35 @@
+---
+title: "Individual Assignment 2"
+author: "MSCI 718 2023W"
+subtitle: Partial Correlation or Bootstrapping
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+```
+
+
+
+
+*Instructions: Complete this assignment individually and submit online to the LEARN Dropbox as a ***_PDF (max 2 pages)_***. You may include any number of pages of appendices, which might include R output, statistics, or plots that don't fit in to the report - just make sure that the report doesn't rely on the appendices to make its points, as graders will at most skim or spot check the appendix. Also upload any source files, for example, and any .R or .Rmd files that you used. If you discussed problems with other students, please describe the nature of that discussion (e.g., on Team, in a study group). Remember, you can discuss approaches to problems with other people, but ***_the work you submit must be your own._**
+
+**Your assignment:** Choose two or more variables from the dataset: [Student Mental Health](https://www.kaggle.com/datasets/thedevastator/medical-student-mental-health) and analyze them using correlation. We will be looking at how you think about assumptions, conduct correlation analysis, and follow-up with conclusions and takeaways. As an added constraint, you must use either one example of using partial correlation (i.e., controlling for additional variables) or bootstrapped correlation (ideally with some rational for choosing bootstrapping). Beyond that, you can use as many or as few statistics, graphs, and tests as you need to discover something interesting.
+
+**For your one report**, include the following sections:
+
+ 1. Data: Provide a quick summary of your dataset and any data cleaning. Ensure that you explain why the variables selected would work for correlation. Clearly list any exclusions or transformations. Aim for 1/2 a page for the section.
+ 2. Planning: Identify the variables that you will correlate and check assumptions of the model(s)/test(s) that you wish to carry out. Be explicit about what model(s)/test(s) you pick and why. This section will likely be a little bit shorter, probably about 1/2 of the page.
+ 3. Analysis: Calculate correlation between your variables, graph it, interpret it, and write up the results. Use plots as appropriate. You may use additional analyses as needed. This will be the bulk of your report, likely 1/2-3/4 of a page.
+ 4. Conclusion: Using the [APA style](https://owl.purdue.edu/owl/research_and_citation/using_research/writing_with_statistics/index.html), write up a conclusion for your analysis and what it might mean. Use plots as appropriate. This section likely be about 1/4 to 1/2 a page.
+ 
+Good luck!
+
+**Hint:** It's important to read the documentation on the given dataset, this may give you a good starting point to approach your analysis.
