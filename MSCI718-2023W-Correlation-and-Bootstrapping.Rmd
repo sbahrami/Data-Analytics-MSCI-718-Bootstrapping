@@ -1,0 +1,253 @@
+---
+title: "Individual Assignment 2"
+author: "Sina Bahrami"
+subtitle: Partial Correlation or Bootstrapping
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+  word_document: default
+geometry: margin=1.2cm
+---
+\vspace{-1cm}
+```{r setup, include=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(magrittr)
+library(ggplot2)
+library(knitr)
+library(pastecs)
+library(boot)
+library(ggm)
+library(car)
+library(corrplot)
+
+detect_outlier <- function(x) {
+  
+  Quantile1 <- quantile(x, probs=.25, na.rm = TRUE)
+  Quantile3 <- quantile(x, probs=.75, na.rm = TRUE)
+  IQR = Quantile3-Quantile1
+  x > Quantile3 + (IQR*1.5) | x < Quantile1 - (IQR*1.5)
+}
+
+# Takes a data frame and a column and removes the outliers from the
+# original data frame
+remove_outlier <- function(dataframe,
+                           columns=names(dataframe)) {
+  # for loop to traverse in columns vector
+  for (colmn in columns) {
+    # remove observation if it satisfies outlier function
+    dataframe <- dataframe[!detect_outlier(dataframe[[colmn]]), ]
+  }
+  return(dataframe)
+}
+```
+
+# Part 1: Data Preprocessing
+```{r load_data, fig.width=4, fig.height=4, echo=FALSE}
+df_main <- read_csv(file="Data Carrard et al. 2022 MedTeach.csv",
+                    show_col_types=FALSE)
+
+```
+```{r head, echo=FALSE, eval=FALSE}
+# Let's first take a look at the data
+head(df_main)
+```
+```{r specifying_data_types, echo=FALSE}
+# column number of the data of different types are separated
+intervals <- c(2, 3, 8, 11:20)
+nominals <- c(4, 5)
+ordinals <- c(9)
+binaries <- c(6, 7, 10)
+
+cnames <- names(df_main)
+```
+
+* The data frame is downloaded from [1] and includes data on mental health of medical students.
+* The data frame has `r nrow(df_main)` rows and `r ncol(df_main)` columns.
+* The variable names in the data frame are `r names(df_main)`.
+* There are `r sum(is.na.data.frame(df_main))` missing data.
+* Also among the interval data, outliers are detected and removed. However, there were very few outliers as visualized by boxplot in the appendix.
+```{r dataexploring, echo=FALSE, eval=FALSE}
+
+# We can visualized mbi_ex vs. qcae_aff to visually explore their relationship
+sum(is.na.data.frame(df_main))
+
+# Binary data are all 1 or 0
+table(df_main[binaries])
+
+```
+```{r shwoing_outliers, echo=FALSE, eval=FALSE}
+
+# Plotting outliers for interval data
+df_main %>%
+  pivot_longer(cols=cnames[intervals], names_to="colname", values_to="value") %>%
+  ggplot() +
+  geom_boxplot(aes(y=value)) +
+  facet_wrap(vars(colname), scales="free")
+```
+```{r removing_outliers, echo=FALSE}
+# Outliers of interval data are removed
+df_main %<>%
+  remove_outlier(columns=cnames[intervals])
+```
+```{r showing_data_wo_outliers, echo=FALSE, eval=FALSE}
+# Plotting outliers for interval data after removal
+df_main %>%
+  pivot_longer(cols=cnames[intervals], names_to="colname", values_to="value") %>%
+  ggplot() +
+  geom_boxplot(aes(y=value)) +
+  facet_wrap(vars(colname), scales="free")
+```
+# Part 2: Planning
+```{r exploration, fig.width=3, fig.height=2, fig.align='center', echo=FALSE}
+
+# As an initial evalutation of association between data, the correlation matrix of interval data are calculated using Pearson's method
+
+initcor <- cor(x=df_main[intervals], use="complete.obs", method="pearson")
+```
+```{r corr_heatmap, echo=FALSE, eval=FALSE}
+# A heatmap of correlation matrix
+corrplot(initcor, method = 'square', diag = FALSE, order = 'hclust',
+         addrect = 3, rect.col = 'blue', rect.lwd = 3, tl.pos = 'd', tl.cex = 0.7)
+
+```
+```{r summary, echo=FALSE}
+df_focus <- df_main %>% select(mbi_ex, cesd)
+
+stat_mbi_ex <- stat.desc(df_focus$mbi_ex, norm=TRUE)
+stat_cesd <- stat.desc(df_focus$cesd, norm=TRUE)
+```
+```{r print_stat, eval=FALSE, echo=FALSE}
+stat_mbi_ex
+stat_cesd
+```
+
+As an initial evalutation of association between data, the correlation matrix of interval data are calculated using Pearson's method and the matrix is plotted as heatmap in the appendix. The result suggests a good correlation between MBI-EX (a measure of emotional exhaustion) and CESD (a measure of depression) with a correlation coefficient of `r format(initcor["mbi_ex","cesd"],digits=3)`, so they are selected for the rest of the study. Stai_t and cesd were the other candidate pair but by the diffinition they are just different measures of depression, so naturally they should have high positive correlation, so it is not investigated here.
+
+* qcae_aff: affective empathy score
+* mbi_ex: MBI emotional exhaustion  
+
+Statistical summary of each data is provided in the appendix. It is worth mentioning that both variables are assumed interval variables.  
+Their correlation test requires test of normality. The qq-normal plot for both variables exhibit satisfactory normality. Histograms and QQ-nomral plot of both variables suggest that CESD is non-normal and is right-skewed, but MBI-EX seems almost normal. To ensure this, the result of normality test, Skewness.2SE and Kurtosis.2SE are observed. The results support the conclusion from the histogram plot. However, normality test rejects the normality of both variables.
+
+```{r hist_normality, fig.align='center', fig.width=3, fig.height=2, echo=FALSE, eval=FALSE}
+
+
+# First histogram and qq normal plot are generated to explore the overal
+# distribution and normality of the data.
+ggplot(df_focus) +
+  geom_histogram(aes(x=mbi_ex),binwidth=2) +
+  labs(x="MBI-EX", y="Frequency", title="Deistribution of MBI-EX")
+ggplot(df_focus) +
+  geom_histogram(aes(x=cesd),binwidth=2) +
+  labs(x="CESD", y="Frequency", title="Distribution of CESD")
+```
+```{r qqplots, fig.width=3, fig.height=2, echo=FALSE, eval=FALSE}
+ggplot(df_focus) +
+  geom_qq(aes(sample=mbi_ex), size=0.5) +
+  stat_qq_line(aes(sample=mbi_ex)) +
+  labs(x="Normal", y="MBI-EX", title="QQ-normal plot of MBI-EX")
+ggplot(df_focus) +
+  geom_qq(aes(sample=cesd), size=0.5) +
+  stat_qq_line(aes(sample=mbi_ex)) +
+  labs(x="Normal", y="CESD", title="QQ-normal plot of CESD")
+```  
+
+* Despite the qq-normal plot, based on Shapiro-Wilk test, both MBI-EX and CESD are non-normal with $p=$ `r format(stat_mbi_ex["normtest.p"],digits=3)` and $p=$ `r format(stat_cesd["normtest.p"],digits=3)` respectively i.e. $p*<0.05$.  
+However, the sample size is `r nrow(df_focus)` (more than 30). This is an alternative condition for normality.  
+To improve the situation for correlation test, a transformation is tried to make the data (particularly CESD) normal thus reducing error as much as possible.
+* The transformation is aimed to improve skewness of CESD, but applying transformation only on CESD would make it difficult to study the linear relationship between CESD and MBI-EX.
+* On the other hand, MBI-EX has already very little skewness, so applying the transformation on it will increase its skewness and reduce its normality. So, this trade-off needs to be considered in selection of the transformation function.
+```{r transformation, fig.width=3, fig.height=2, echo=FALSE}
+
+# Tranformation function
+tr <- function(x)x^0.7
+tr_inv <- function(y)y^(10/7)
+
+# Transforming data to improve normality
+df_focus_tr <- df_focus %>%
+  mutate(cesd_tr=tr(cesd), mbi_ex_tr=tr(mbi_ex))
+```
+```{r hist_tr, fig.align='center', fig.width=3, fig.height=2, echo=FALSE, eval=FALSE}
+
+df_focus_tr %>%
+  ggplot() +
+  geom_histogram(aes(x=cesd_tr), binwidth=0.3)+
+  labs(x="CESD^0.7", y="Frequency", title="Distribution of CESD^0.7")
+```
+```{r qqplot_tr, fig.width=3, fig.height=2, echo=FALSE, eval=FALSE}
+
+ggplot(df_focus_tr) +
+  geom_qq(aes(sample=cesd_tr), size=0.5) +
+  stat_qq_line(aes(sample=cesd_tr)) +
+  labs(x="Normal", y="CESD^0.7", title="QQ-normal of CESD^0.7")
+
+ggplot(df_focus_tr) +
+  geom_qq(aes(sample=mbi_ex_tr), size=0.5) +
+  stat_qq_line(aes(sample=mbi_ex_tr)) +
+  labs(x="Normal", y="MBI-EX^0.7", title="QQ-normal of MBI-EX^0.7")
+```
+```{r stats_tr, echo=FALSE}
+stat_mbi_ex_tr <- stat.desc(df_focus_tr$mbi_ex_tr, norm=TRUE)
+stat_cesd_tr <- stat.desc(df_focus_tr$cesd_tr, norm=TRUE)
+```
+```{r print_stat_tr, eval=FALSE, echo=FALSE}
+stat_mbi_ex_tr
+stat_cesd_tr
+```
+
+* The applied transformation is $X^{0.7}$. (Signs of variable values are all positive, so the transformation can be applied for the whole range without producing null values.)
+* As shown in the QQ-normal plot and histogram in the appendix, the transformation has eliminated most of the skewness, but there is still some kurtosis for CESD. However, considering the satisfactory qq-normal and the good sample size (>30), the Pearson's correlation test is performed on the variable pair i.e. both assumptions of this test, which are interval data and normality (or sample size>30), are satisfied.
+
+# Part 3: Analysis
+```{r cor_test, warning=FALSE, echo=FALSE}
+cortest_pearson <- cor.test(df_focus_tr$mbi_ex_tr, df_focus_tr$cesd_tr, method="pearson")
+cortest_spearman <- cor.test(df_focus_tr$mbi_ex, df_focus_tr$cesd, method="spearman")
+```
+
+* The correlation coefficient is `r format(cortest_pearson$estimate, digits=3)` with the 95% confidence interval of (`r format(cortest_pearson$conf.int, digits=3)`).
+* Because p-value is `r format(cortest_pearson$p.value, digits=3)` ($*p<0.05$), the null hypothesis is rejected i.e. there is correlation between MBI emotional exhaustion and affective empathy at 5% level of significance.
+* Instead of transforming data, we can change our method to Spearman, which does not required normality and interval data. The p-value of Spearman's method would be `r format(cortest_spearman$p.value, digits=3)`, which also rejects Null hypothesis i.e. supports correlation.
+* The confidence interval of Spearman's can be obtained from bootstrapping and be compared with the one from Pearson's.
+```{r bootstrapping, warning=FALSE, echo=FALSE}
+bootTau <- function(df, i) cor(df$mbi_ex[i], df$cesd[i],
+                               method="spearman", use="complete.obs")
+boot_spearman <- boot(df_focus, bootTau, 1000)
+spearman_boot_ci <- boot.ci(boot_spearman) 
+```
+
+* The confidence interval from basic bootstrapping of Spearman's method on non-transformed data is `r format(spearman_boot_ci$basic[4:5], digits=3)`. This CI is very close to the one from Pearson's method: `r format(cortest_pearson$conf.int, digits=3)`.
+
+```{r corplot, fig.width=4, fig.height=3, fig.align='center', echo=FALSE}
+df_focus_tr_long <- df_focus_tr %>%
+  pivot_longer(cols=c(mbi_ex_tr,cesd_tr), names_to="vars", values_to="vals")
+levtest <- leveneTest(df_focus_tr_long$vals, as.factor(df_focus_tr_long$vars))
+
+df_focus_tr %>%
+  ggplot(aes(x=mbi_ex_tr, y=cesd_tr)) +
+  geom_point(size=0.5) +
+  geom_smooth(formula = y ~ x, method=lm) +
+  labs(x="MBI-EX ^ 0.7", y=" CESD ^ 0.7",
+       title="Scatter Plot and Regression Line of the Transformed Variables") +
+  theme(plot.title = element_text(size = 9, hjust=0.5))
+```
+
+The association between the two variables is also visualized using scatter plot in combination with a linear model regression line. However, Regression models are very sensitive to homoscedasticity of variables. The p-value of homoscedasticity for the variables is `r format(levtest["Pr(>F)"][[1]][1], digits=3)`, so the null hypothesis is rejected and assumption of homoscedasticity is rejected, which means the linear regression model and the visualized CI is not valid.
+
+# Part 4: Conclusion
+In this study two variables, MBI-EX and CESD, which represent work burnout in form of emotional exhaustion and depression respectively are studied for medical students. Data were almost clean with few outliers. Both variables were considered as interval data. To obtain the correlation between them, and carry out the suitable tests, the assumption were investigation with details provided in the appendix. The correlation test and correlation coefficient suggest that there is moderate to strong correlation between the variables. However, it is worth mentioning this only support association between the variables and not causation. Also using bootstrapping method, CI for Spearman's method was obtained which was very close to the one obtained from Pearson's test.
+
+## References
+1. Sayadi, Fares. “Medical Student Mental Health.” Kaggle, 25 Jan. 2023, https://www.kaggle.com/datasets/thedevastator/medical-student-mental-health/code.  
+
+\newpage
+# Appendix
+
+## Codes
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=TRUE, fig.height=4, fig.width=6, fig.align='center', theme_set(theme(title = element_text(size=12)))}
+```
+
+
